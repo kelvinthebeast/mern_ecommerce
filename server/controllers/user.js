@@ -70,27 +70,34 @@ const getCurrent = asyncHandler( async (req, res) => {
 const refreshAccessToken = asyncHandler( async (req, res) => {
     // lấy token từ cookies 
     const cookie = req.cookies
-    console.log(cookie)
     // check xem có token hay không
     if (!cookie && !cookie.refreshToken) throw new Error("No refresh token in cookies!")
-    const refreshToken = cookie.refreshToken;
+    // const refreshToken = cookie.refreshToken;
     // check trong cookie mã refreshToken có hợp lệ 
-    jwt.verify(refreshToken, process.env.JWT_SECRET, async (error, decode) => {
-        if (error) throw new Error("Invalid Refresh Token!")
-        // check xem token có khớp với token lưu trong db
-        const response = await User.findOne({_id: decode._id, refreshToken: cookie.refreshToken})
-
-        return res.status(200).json({
-            success: response ? true : false,
-            newAccessToken: response ? await generateAccessToken(response._id, response.role) :"Refresh token is not match"
-        })
+    const rs = jwt.verify(cookie.refreshToken, process.env.JWT_SECRET)
+    const response = await User.findOne({ _id: rs._id, refreshToken: cookie.refreshToken})
+    return res.status(200).json({
+        success: response ? true : false,
+        newAccessToken: response ? await generateAccessToken(response._id, response.role) : "Refresh Token not matched"
     })
-    
-    
+})
+
+const logout = asyncHandler( async(req, res) => {
+    const cookie = req.cookies
+    if (!cookie || !cookie.refreshToken) throw new Error("No refresh token in cookies")
+    // xóa refresh token ở db 
+    await User.findOneAndUpdate({refreshToken: cookie.refreshToken}, {refreshToken: ""}, {new: true})   
+    // xóa refresh token ở cookies luôn
+    res.clearCookie("refreshToken", { httpOnly: true, secure: true }) 
+    return res.status(200).json({
+        success: true,
+        mess: "Logout is done!"
+    })
 })
 module.exports = {
     register,
     login,
     getCurrent,
-    refreshAccessToken
+    refreshAccessToken,
+    logout
 }
