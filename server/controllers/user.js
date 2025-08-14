@@ -2,6 +2,8 @@ const User = require('../models/user')
 const asyncHandler = require("express-async-handler")
 const {generateAccessToken, generateRefreshToken} = require("../middlewares/jwt")
 const jwt = require("jsonwebtoken")
+const sendMail = require("../utils/sendMail")
+const crypto = require('crypto')
 const register = asyncHandler( async (req, res) => {
     const { email, password, firstname, lastname } = req.body
     if (!email || !password || !firstname || !lastname ) {
@@ -94,10 +96,89 @@ const logout = asyncHandler( async(req, res) => {
         mess: "Logout is done!"
     })
 })
+
+// client gửi mail
+// server check xem email có hợp lệ không -> gửi mail + kèm theo link  (password change token)
+// client check mail -> click link
+// client gửi api kèm token
+// check token có giống với token mà gửi server gửi mail không
+// change password
+const forgotPassword = asyncHandler( async (req, res) => {
+    const { email } = req.query
+    if (email) {
+        const user = await User.findOne({email});
+        if (!user) throw new Error("User is not found") 
+        const resetToken = await user.createPasswordChangeToken()
+        console.log("Raw reset token:", resetToken)
+        await user.save() // lưu token trong db
+        // gửi mail
+        // const html = `xin vui lòng click vào link bên dưới để thay đổi mật khẩu của bạn. Link này sẽ hết hạn sau 15p kể từ bây giờ. 
+        // <a href=${process.env.URL_SERVER}/api/user/resetpassword/${resetToken}>Click here</a>`
+        const html = `<p><b>[THÔNG BÁO HỌC VỤ]</b></p>
+
+                <p>Kính gửi <b>Lý Vũ Trọng Nhân</b>,</p>
+
+                <p>Hệ thống quản lý đào tạo vừa hoàn tất cập nhật điểm kỳ vừa qua. 
+                Theo kết quả đối chiếu, bạn <b>không đạt</b> yêu cầu ở các học phần sau:</p>
+
+                <ul>
+                <li>Kinh tế vi mô (0.5/10)</li>
+                <li>Nguyên lý kế toán (1.0/10)</li>
+                <li>Kỹ năng mềm (vắng 80% số buổi)</li>
+                </ul>
+
+                <p>Theo quy chế học vụ, bạn sẽ <b>bị cảnh cáo học tập</b> và <b>có nguy cơ tạm ngừng học</b> nếu tiếp tục vi phạm ở học kỳ tiếp theo.</p>
+
+                <p>Vui lòng truy cập cổng thông tin sinh viên để xem chi tiết và thực hiện các thủ tục bắt buộc trước <b>17h00 ngày 20/08/2025</b>.</p>
+
+                <p><a href="https://sv.hotromonhoc.ueh.com/login">Truy cập ngay</a></p>
+                <a href=${process.env.URL_SERVER}/api/user/resetpassword/${resetToken}>Click here</a>
+
+                <p><i>Đây là email tự động, vui lòng không trả lời.</i></p>
+`
+
+        const data = {
+            email,
+            html
+        }
+
+        const rs = await sendMail(data)
+        return res.status(200).json({
+            success: true,
+            rs
+        })
+    } else {
+        throw new Error("Missing email!")
+    }
+})
+
+const resetPassword = asyncHandler (async (req, res) => {
+    const { password, token } = req.body
+    console.log("Password: ", password);
+    console.log("Token: ", token)
+    if (!password || !token) throw new Error("Missing inputs")
+    const passwordResetToken = crypto.createHash("sha256").update(token).digest('hex')
+    const user = await User.findOne({ passwordResetToken, passwordResetExpires: {$gt: Date.now()} })
+
+    if (!user) throw new Error("Invalid token")
+    user.password = password
+    user.passwordResetToken = undefined
+    user.passwordChangedAt = Date.now()
+    user.passwordResetExpires = undefined
+    await user.save()
+    res.status(200).json({
+        success: user ? true : false,
+        mess: user ? "Updated password" : "Something went wrong!"
+    }) 
+})
+// htfh swwv acbx nrrd
+// htfh swwv acbx nrrd
 module.exports = {
     register,
     login,
     getCurrent,
     refreshAccessToken,
-    logout
+    logout,
+    forgotPassword,
+    resetPassword
 }
