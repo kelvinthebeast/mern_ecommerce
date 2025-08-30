@@ -34,21 +34,20 @@ const login = asyncHandler( async (req, res) => {
             success: false,
             mess: "Missing inputs"
         })
-
     }
 
     const response = await User.findOne({ email })
     if (response && await response.isCorrectPassword(password)) {
         // tách password và role ra khỏi response
-        const {password, role, ...userData} = response.toObject()
+        const {password, role, refreshToken,...userData} = response.toObject()
         // tạo access token
         const accessToken = await generateAccessToken(response._id, role)
         // tạo refresh token
-        const refreshToken = await generateRefreshToken(response._id)
+        const newRefreshToken = await generateRefreshToken(response._id)
         // lưu refresh token vào database
-        await User.findByIdAndUpdate(response._id, { refreshToken }, { new: true })
+        await User.findByIdAndUpdate(response._id, { refreshToken: newRefreshToken }, { new: true })
         // lưu refresh token vào cookies
-        res.cookie('refreshToken', refreshToken, { httpOnly: true, maxAge: 7*24*60*60*1000 })
+        res.cookie('refreshToken', newRefreshToken, { httpOnly: true, maxAge: 7*24*60*60*1000 })
         return res.status(200).json({
             success: true,
             accessToken,
@@ -171,6 +170,15 @@ const resetPassword = asyncHandler (async (req, res) => {
         mess: user ? "Updated password" : "Something went wrong!"
     }) 
 })
+
+const getUsers = asyncHandler( async (req, res) => {
+    const response = await User.find()
+
+    return res.status(200).json({
+        success: response ? true : false,
+        users: response
+    })
+})
 // htfh swwv acbx nrrd
 // htfh swwv acbx nrrd
 module.exports = {
@@ -180,5 +188,6 @@ module.exports = {
     refreshAccessToken,
     logout,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    getUsers
 }

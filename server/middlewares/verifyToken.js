@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken')
 const asyncHandler = require('express-async-handler')
+const user = require('../models/user')
 
 const verifyAccessToken = asyncHandler( async (req, res, next) => {
     // headers: { authorization: bearer token }
@@ -62,7 +63,17 @@ const verifyAccessToken3 = asyncHandler( async (req, res, next) => {
         })
     }
 })
+
+const isAdmin = asyncHandler(async (req, res, next) => {
+    const { role } = req.user
+    if (role !== "admin") return res.status(401).json({
+        success: false,
+        mess: "Admin role required"
+    })
+    next()
+})
 module.exports = {
     verifyAccessToken,
-    verifyAccessToken2
+    verifyAccessToken2,
+    isAdmin
 }
